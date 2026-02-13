@@ -37,11 +37,9 @@ All configurable in-game:
 
 ## 🐛 Support
 
-- **Discord:** [Join Server](https://discord.gg/YOUR_INVITE)
+- **Discord:** [Join Server](https://discord.gg/6PS2mHcVjT)
 - **Bugs:** `#🐛┃bug-reports`
 - **Ideas:** `#💡┃suggestions`
-
-**Bug Bounty:** Find 5 bugs = Free premium!
 
 ---
 
