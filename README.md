@@ -2,7 +2,7 @@
 
 **Advanced script for Murder Vs Sheriff Duels (MVSD)**
 
-[![Discord](https://img.shields.io/badge/Discord-Join-7289DA)](https://discord.gg/YOUR_INVITE)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA)](https://discord.gg/6PS2mHcVjT)
 
 ---
 
