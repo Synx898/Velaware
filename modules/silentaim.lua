@@ -212,41 +212,14 @@ local function getTargetPosition(targetPlayer)
     return nil
 end
 
+-- Silent aim now works by exporting functions to GunController
+-- No hooks needed!
+
 -- ========================================
--- SILENT AIM HOOK (Intercepts ShootGun remote)
+-- EXPORT FUNCTIONS FOR GUN CONTROLLER
 -- ========================================
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    -- Only hook ShootGun remote
-    if method == "FireServer" and self == shootRemote and getgenv().silentAimConfig.ENABLED then
-        local target = getClosestTarget()
-        
-        if target then
-            local targetPos = getTargetPosition(target)
-            
-            if targetPos then
-                -- Redirect bullet to target
-                local targetPart = target.Character:FindFirstChild("Head") 
-                    or target.Character:FindFirstChild("UpperTorso")
-                    or target.Character:FindFirstChild("HumanoidRootPart")
-                
-                -- args[1] = characterOrigin (keep)
-                -- args[2] = finalTarget (CHANGE)
-                -- args[3] = hitInstance (CHANGE) 
-                -- args[4] = hitPosition (CHANGE)
-                
-                args[2] = targetPos
-                args[3] = targetPart
-                args[4] = targetPos
-            end
-        end
-    end
-    
-    return oldNamecall(self, unpack(args))
-end))
+getgenv().silentAim_getClosestTarget = getClosestTarget
+getgenv().silentAim_getTargetPosition = getTargetPosition
 
 -- ========================================
 -- FOV CIRCLE UPDATE LOOP
@@ -262,6 +235,6 @@ local Connections = {}
 
 Connections[1] = RunService.RenderStepped:Connect(updateFOVCircle)
 
-print("[Velaware] Silent Aim loaded - Bullet redirection active")
+print("[Velaware] Silent Aim loaded - Functions exported to GunController")
 
 return Connections
