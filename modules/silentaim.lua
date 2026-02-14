@@ -288,6 +288,7 @@ end
 -- ========================================
 local lastShot = 0
 local shootCooldown = 0.1
+local isProcessingSilentAim = false
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
@@ -298,9 +299,18 @@ UserInputService.InputBegan:Connect(function(input, processed)
         local currentTime = tick()
         if currentTime - lastShot < shootCooldown then return end
         
-        if fireSilentShot() then
+        -- Try silent aim, but don't block if it fails
+        local firedSilent = fireSilentShot()
+        
+        if firedSilent then
             lastShot = currentTime
+            isProcessingSilentAim = true
+            
+            -- Block the normal gun from firing for a brief moment
+            task.wait(0.05)
+            isProcessingSilentAim = false
         end
+        -- If no target, let the game handle the shot normally
     end
 end)
 
