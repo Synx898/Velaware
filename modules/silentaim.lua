@@ -213,8 +213,76 @@ local function getTargetPosition(targetPlayer)
 end
 
 -- ========================================
--- SILENT AIM FIRING (NO HOOKS)
+-- FULL GUN FIRING SYSTEM
 -- ========================================
+local function fireNormalShot()
+    local myChar = player.Character
+    if not myChar then return false end
+    
+    -- Check if we have a gun equipped
+    local gun = nil
+    for _, tool in pairs(myChar:GetChildren()) do
+        if tool:IsA("Tool") and tool:GetAttribute("EquipAnimation") == "Gun_Equip" then
+            gun = tool
+            break
+        end
+    end
+    
+    if not gun then return false end
+    
+    -- Respect cooldown if no-cooldown is disabled
+    if not getgenv().cooldownEnabled then
+        local cooldown = gun:GetAttribute("Cooldown") or 2.5
+        local lastFireTime = gun:GetAttribute("_LastFireTime") or 0
+        
+        if tick() - lastFireTime < cooldown then
+            return false
+        end
+        
+        gun:SetAttribute("_LastFireTime", tick())
+    end
+    
+    local muzzle = gun:FindFirstChild("Muzzle", true)
+    if not muzzle then return false end
+    
+    -- Get mouse target position
+    local mouse = player:GetMouse()
+    local targetPos = mouse.Hit.Position + (50 * mouse.UnitRay.Direction)
+    
+    -- Get animator
+    local animator = myChar:FindFirstChild("Humanoid")
+    if animator then
+        animator = animator:FindFirstChild("Animator")
+    end
+    
+    if not animator then return false end
+    
+    -- Fire gun normally (where you're aiming)
+    local animTrack = animator:LoadAnimation(shootAnim)
+    animTrack:Play()
+    
+    local sound = gun:FindFirstChild("Fire")
+    if sound then sound:Play() end
+    
+    bulletRenderer(muzzle.WorldPosition, targetPos, "Default")
+    
+    -- Raycast to see what we hit
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {player.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.IgnoreWater = true
+    
+    local direction = (targetPos - muzzle.WorldPosition).Unit
+    local rayResult = Workspace:Raycast(muzzle.WorldPosition, direction * 2000, raycastParams)
+    
+    local hitPart = rayResult and rayResult.Instance
+    local hitPos = rayResult and rayResult.Position or targetPos
+    
+    shootRemote:FireServer(muzzle.WorldPosition, hitPos, hitPart, hitPos)
+    
+    return true
+end
+
 local function fireSilentShot()
     if not getgenv().silentAimConfig.ENABLED then return false end
     
@@ -265,7 +333,7 @@ local function fireSilentShot()
     
     if not animator then return false end
     
-    -- Fire gun
+    -- Fire gun (redirected to target)
     local animTrack = animator:LoadAnimation(shootAnim)
     animTrack:Play()
     
@@ -287,30 +355,30 @@ end
 -- MOUSE CLICK DETECTION
 -- ========================================
 local lastShot = 0
-local shootCooldown = 0.1
-local isProcessingSilentAim = false
+local shootCooldown = 0.05
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        if not getgenv().silentAimConfig.ENABLED then return end
-        
         local currentTime = tick()
         if currentTime - lastShot < shootCooldown then return end
         
-        -- Try silent aim, but don't block if it fails
-        local firedSilent = fireSilentShot()
+        local shotFired = false
         
-        if firedSilent then
-            lastShot = currentTime
-            isProcessingSilentAim = true
-            
-            -- Block the normal gun from firing for a brief moment
-            task.wait(0.05)
-            isProcessingSilentAim = false
+        -- Try silent aim if enabled
+        if getgenv().silentAimConfig.ENABLED then
+            shotFired = fireSilentShot()
         end
-        -- If no target, let the game handle the shot normally
+        
+        -- If silent aim didn't fire (no target), shoot normally
+        if not shotFired then
+            shotFired = fireNormalShot()
+        end
+        
+        if shotFired then
+            lastShot = currentTime
+        end
     end
 end)
 
