@@ -213,174 +213,40 @@ local function getTargetPosition(targetPlayer)
 end
 
 -- ========================================
--- FULL GUN FIRING SYSTEM
+-- SILENT AIM HOOK (Intercepts ShootGun remote)
 -- ========================================
-local function fireNormalShot()
-    local myChar = player.Character
-    if not myChar then return false end
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
     
-    -- Check if we have a gun equipped
-    local gun = nil
-    for _, tool in pairs(myChar:GetChildren()) do
-        if tool:IsA("Tool") and tool:GetAttribute("EquipAnimation") == "Gun_Equip" then
-            gun = tool
-            break
+    -- Only hook ShootGun remote
+    if method == "FireServer" and self == shootRemote and getgenv().silentAimConfig.ENABLED then
+        local target = getClosestTarget()
+        
+        if target then
+            local targetPos = getTargetPosition(target)
+            
+            if targetPos then
+                -- Redirect bullet to target
+                local targetPart = target.Character:FindFirstChild("Head") 
+                    or target.Character:FindFirstChild("UpperTorso")
+                    or target.Character:FindFirstChild("HumanoidRootPart")
+                
+                -- args[1] = characterOrigin (keep)
+                -- args[2] = finalTarget (CHANGE)
+                -- args[3] = hitInstance (CHANGE) 
+                -- args[4] = hitPosition (CHANGE)
+                
+                args[2] = targetPos
+                args[3] = targetPart
+                args[4] = targetPos
+            end
         end
     end
     
-    if not gun then return false end
-    
-    -- Respect cooldown if no-cooldown is disabled
-    if not getgenv().cooldownEnabled then
-        local cooldown = gun:GetAttribute("Cooldown") or 2.5
-        local lastFireTime = gun:GetAttribute("_LastFireTime") or 0
-        
-        if tick() - lastFireTime < cooldown then
-            return false
-        end
-        
-        gun:SetAttribute("_LastFireTime", tick())
-    end
-    
-    local muzzle = gun:FindFirstChild("Muzzle", true)
-    if not muzzle then return false end
-    
-    -- Get mouse target position
-    local mouse = player:GetMouse()
-    local targetPos = mouse.Hit.Position + (50 * mouse.UnitRay.Direction)
-    
-    -- Get animator
-    local animator = myChar:FindFirstChild("Humanoid")
-    if animator then
-        animator = animator:FindFirstChild("Animator")
-    end
-    
-    if not animator then return false end
-    
-    -- Fire gun normally (where you're aiming)
-    local animTrack = animator:LoadAnimation(shootAnim)
-    animTrack:Play()
-    
-    local sound = gun:FindFirstChild("Fire")
-    if sound then sound:Play() end
-    
-    bulletRenderer(muzzle.WorldPosition, targetPos, "Default")
-    
-    -- Raycast to see what we hit
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {player.Character}
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.IgnoreWater = true
-    
-    local direction = (targetPos - muzzle.WorldPosition).Unit
-    local rayResult = Workspace:Raycast(muzzle.WorldPosition, direction * 2000, raycastParams)
-    
-    local hitPart = rayResult and rayResult.Instance
-    local hitPos = rayResult and rayResult.Position or targetPos
-    
-    shootRemote:FireServer(muzzle.WorldPosition, hitPos, hitPart, hitPos)
-    
-    return true
-end
-
-local function fireSilentShot()
-    if not getgenv().silentAimConfig.ENABLED then return false end
-    
-    local myChar = player.Character
-    if not myChar then return false end
-    
-    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return false end
-    
-    -- Check if we have a gun equipped
-    local gun = nil
-    for _, tool in pairs(myChar:GetChildren()) do
-        if tool:IsA("Tool") and tool:GetAttribute("EquipAnimation") == "Gun_Equip" then
-            gun = tool
-            break
-        end
-    end
-    
-    if not gun then return false end
-    
-    -- Respect cooldown if no-cooldown is disabled
-    if not getgenv().cooldownEnabled then
-        local cooldown = gun:GetAttribute("Cooldown") or 2.5
-        local lastFireTime = gun:GetAttribute("_LastFireTime") or 0
-        
-        if tick() - lastFireTime < cooldown then
-            return false
-        end
-        
-        gun:SetAttribute("_LastFireTime", tick())
-    end
-    
-    local muzzle = gun:FindFirstChild("Muzzle", true)
-    if not muzzle then return false end
-    
-    -- Find target
-    local target = getClosestTarget()
-    if not target then return false end
-    
-    local targetPos = getTargetPosition(target)
-    if not targetPos then return false end
-    
-    -- Get animator
-    local animator = myChar:FindFirstChild("Humanoid")
-    if animator then
-        animator = animator:FindFirstChild("Animator")
-    end
-    
-    if not animator then return false end
-    
-    -- Fire gun (redirected to target)
-    local animTrack = animator:LoadAnimation(shootAnim)
-    animTrack:Play()
-    
-    local sound = gun:FindFirstChild("Fire")
-    if sound then sound:Play() end
-    
-    bulletRenderer(muzzle.WorldPosition, targetPos, "Default")
-    
-    local targetPart = target.Character:FindFirstChild("Head") 
-        or target.Character:FindFirstChild("UpperTorso")
-        or target.Character:FindFirstChild("HumanoidRootPart")
-    
-    shootRemote:FireServer(muzzle.WorldPosition, targetPos, targetPart, targetPos)
-    
-    return true
-end
-
--- ========================================
--- MOUSE CLICK DETECTION
--- ========================================
-local lastShot = 0
-local shootCooldown = 0.05
-
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local currentTime = tick()
-        if currentTime - lastShot < shootCooldown then return end
-        
-        local shotFired = false
-        
-        -- Try silent aim if enabled
-        if getgenv().silentAimConfig.ENABLED then
-            shotFired = fireSilentShot()
-        end
-        
-        -- If silent aim didn't fire (no target), shoot normally
-        if not shotFired then
-            shotFired = fireNormalShot()
-        end
-        
-        if shotFired then
-            lastShot = currentTime
-        end
-    end
-end)
+    return oldNamecall(self, unpack(args))
+end))
 
 -- ========================================
 -- FOV CIRCLE UPDATE LOOP
@@ -395,5 +261,7 @@ end)
 local Connections = {}
 
 Connections[1] = RunService.RenderStepped:Connect(updateFOVCircle)
+
+print("[Velaware] Silent Aim loaded - Bullet redirection active")
 
 return Connections
