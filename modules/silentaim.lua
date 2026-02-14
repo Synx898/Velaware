@@ -31,7 +31,6 @@ getgenv().silentAimConfig = {
     MAX_DISTANCE = 500,
     TEAM_CHECK = true,
     VISIBLE_CHECK = true,
-    AUTO_SHOOT = false,
 }
 
 -- ========================================
@@ -48,8 +47,8 @@ fovCircle.Visible = false
 
 local function updateFOVCircle()
     if getgenv().silentAimConfig.SHOW_FOV and getgenv().silentAimConfig.ENABLED then
-        local screenSize = camera.ViewportSize
-        fovCircle.Position = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
+        local mousePos = UserInputService:GetMouseLocation()
+        fovCircle.Position = mousePos
         fovCircle.Radius = getgenv().silentAimConfig.FOV_RADIUS
         fovCircle.Visible = true
     else
@@ -85,7 +84,20 @@ local function isTargetVisible(targetChar, fromPosition)
     local direction = targetPart.Position - fromPosition
     local rayResult = Workspace:Raycast(fromPosition, direction, raycastParams)
     
-    return rayResult == nil
+    -- If raycast hits something, check if it's a wall/solid object
+    if rayResult then
+        local hitPart = rayResult.Instance
+        
+        -- Allow shooting through certain objects (like small props, particles, effects)
+        if hitPart.Transparency >= 0.5 then return true end
+        if hitPart.CanCollide == false then return true end
+        if hitPart:IsA("ParticleEmitter") or hitPart:IsA("Beam") then return true end
+        
+        -- Block if it's a solid wall/part
+        return false
+    end
+    
+    return true
 end
 
 local function isInFOV(targetPosition)
@@ -93,11 +105,10 @@ local function isInFOV(targetPosition)
     
     if not onScreen then return false end
     
-    local screenSize = camera.ViewportSize
-    local screenCenter = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
+    local mousePos = UserInputService:GetMouseLocation()
     local targetPos2D = Vector2.new(screenPos.X, screenPos.Y)
     
-    local distance = (targetPos2D - screenCenter).Magnitude
+    local distance = (targetPos2D - mousePos).Magnitude
     
     return distance <= getgenv().silentAimConfig.FOV_RADIUS
 end
@@ -151,8 +162,7 @@ local function getClosestTarget()
     local closestPlayer = nil
     local shortestDistance = math.huge
     
-    local screenSize = camera.ViewportSize
-    local screenCenter = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
+    local mousePos = UserInputService:GetMouseLocation()
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if isValidTarget(targetPlayer) then
@@ -162,7 +172,7 @@ local function getClosestTarget()
                 
                 if onScreen then
                     local targetPos2D = Vector2.new(screenPos.X, screenPos.Y)
-                    local distance = (targetPos2D - screenCenter).Magnitude
+                    local distance = (targetPos2D - mousePos).Magnitude
                     
                     if distance < shortestDistance then
                         shortestDistance = distance
@@ -224,6 +234,18 @@ local function fireSilentShot()
     end
     
     if not gun then return false end
+    
+    -- Respect cooldown if no-cooldown is disabled
+    if not getgenv().cooldownEnabled then
+        local cooldown = gun:GetAttribute("Cooldown") or 2.5
+        local lastFireTime = gun:GetAttribute("_LastFireTime") or 0
+        
+        if tick() - lastFireTime < cooldown then
+            return false
+        end
+        
+        gun:SetAttribute("_LastFireTime", tick())
+    end
     
     local muzzle = gun:FindFirstChild("Muzzle", true)
     if not muzzle then return false end
