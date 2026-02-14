@@ -1,5 +1,5 @@
 -- ========================================
--- VELAWARE - SILENT AIM MODULE (IMPROVED)
+-- VELAWARE - SILENT AIM MODULE (FIXED)
 -- Murder vs Sheriff Duels
 -- ========================================
 
@@ -75,6 +75,7 @@ end
 
 local function isTargetVisible(targetChar, fromPosition)
     if not targetChar or not targetChar.Parent then return false end
+    if not getgenv().silentAimConfig.WALL_CHECK then return true end
     
     local targetPart = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Head")
     if not targetPart then return false end
@@ -87,14 +88,15 @@ local function isTargetVisible(targetChar, fromPosition)
     local direction = targetPart.Position - fromPosition
     local rayResult = Workspace:Raycast(fromPosition, direction, raycastParams)
     
-    -- Return true if no obstruction or if we hit the target character
+    -- If no wall hit, target is visible
     if not rayResult then return true end
     
-    -- Check if we hit the target or something in the target
+    -- If we hit the target or something on the target, it's visible
     if rayResult.Instance:IsDescendantOf(targetChar) then
         return true
     end
     
+    -- We hit a wall, target not visible
     return false
 end
 
@@ -147,7 +149,7 @@ local function isValidTarget(targetPlayer)
     if not isInFOV(hrp.Position) then return false end
     
     -- Visibility check (wall check) - only prevents targeting people behind walls
-    if getgenv().silentAimConfig.WALL_CHECK and getgenv().silentAimConfig.VISIBLE_CHECK then
+    if getgenv().silentAimConfig.VISIBLE_CHECK then
         if not isTargetVisible(char, myHrp.Position) then return false end
     end
     
@@ -249,48 +251,50 @@ local function getTargetPosition(targetPlayer)
         basePosition = basePosition + prediction
     end
     
-    return basePosition
+    return basePosition, targetPart
 end
 
 -- ========================================
--- SILENT AIM HOOK
+-- SILENT AIM HOOK (FIXED)
 -- ========================================
-local originalNamecall
-originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
     local args = {...}
     local method = getnamecallmethod()
     
-    -- Hook the shoot remote
-    if method == "FireServer" and self == shootRemote and getgenv().silentAimConfig.ENABLED then
-        local target = getClosestTarget()
-        
-        if target then
-            local targetPos = getTargetPosition(target)
+    -- Hook the shoot remote when silent aim is enabled
+    if not checkcaller() and method == "FireServer" and self == shootRemote then
+        if getgenv().silentAimConfig.ENABLED then
+            local target = getClosestTarget()
             
-            if targetPos then
-                -- Get the target part for the server
-                local targetPart = target.Character:FindFirstChild("Head") 
-                    or target.Character:FindFirstChild("UpperTorso")
-                    or target.Character:FindFirstChild("HumanoidRootPart")
+            if target then
+                local targetPos, targetPart = getTargetPosition(target)
                 
-                -- Replace the shot direction arguments
-                args[2] = targetPos  -- Shot direction
-                args[3] = targetPart  -- Hit part
-                args[4] = targetPos   -- Hit position
-                
-                -- Call original with modified args
-                return originalNamecall(self, unpack(args))
+                if targetPos and targetPart then
+                    -- Modify the arguments to aim at the target
+                    -- args[1] = muzzle position (keep original)
+                    -- args[2] = aim direction (modify this)
+                    -- args[3] = hit part (modify this)
+                    -- args[4] = hit position (modify this)
+                    
+                    args[2] = targetPos  -- Aim direction
+                    args[3] = targetPart  -- Hit part
+                    args[4] = targetPos   -- Hit position
+                end
             end
         end
+        
+        -- Call original with potentially modified args
+        return oldNamecall(self, unpack(args))
     end
     
-    return originalNamecall(self, ...)
-end)
+    return oldNamecall(self, ...)
+end))
 
 -- ========================================
 -- FOV CIRCLE UPDATE LOOP
 -- ========================================
-RunService.RenderStepped:Connect(function()
+local connection = RunService.RenderStepped:Connect(function()
     updateFOVCircle()
 end)
 
@@ -298,13 +302,12 @@ end)
 -- CLEANUP
 -- ========================================
 local Connections = {}
+Connections[1] = connection
 
-Connections[1] = RunService.RenderStepped:Connect(updateFOVCircle)
-
-print("[VELAWARE] Silent Aim initialized with improvements:")
-print("  - FOV follows cursor")
-print("  - Improved wall check (won't block normal shooting)")
-print("  - Movement prediction")
-print("  - Respects game cooldowns")
+print("[VELAWARE] Silent Aim initialized!")
+print("  ✓ FOV follows cursor")
+print("  ✓ Improved wall check")
+print("  ✓ Movement prediction")
+print("  ✓ Respects game cooldowns")
 
 return Connections
