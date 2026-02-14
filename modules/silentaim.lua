@@ -203,58 +203,16 @@ local function getTargetPosition(targetPlayer)
 end
 
 -- ========================================
--- SILENT AIM HOOK
+-- SILENT AIM FIRING (NO HOOKS)
 -- ========================================
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    
-    -- Hook the ShootGun remote
-    if method == "FireServer" and self.Name == "ShootGun" and getgenv().silentAimConfig.ENABLED then
-        local target = getClosestTarget()
-        
-        if target then
-            local targetPos = getTargetPosition(target)
-            
-            if targetPos then
-                -- args[1] = muzzlePos (keep original)
-                -- args[2] = targetPos (REDIRECT HERE)
-                -- args[3] = hitPart (update to target part)
-                -- args[4] = finalPos (update to target)
-                
-                local targetPart = target.Character:FindFirstChild("Head") 
-                    or target.Character:FindFirstChild("UpperTorso")
-                    or target.Character:FindFirstChild("HumanoidRootPart")
-                
-                args[2] = targetPos  -- Redirect bullet
-                args[3] = targetPart  -- Hit part
-                args[4] = targetPos   -- Final position
-            end
-        end
-    end
-    
-    return oldNamecall(self, unpack(args))
-end)
-
--- ========================================
--- AUTO SHOOT (OPTIONAL)
--- ========================================
-local lastShot = 0
-local shootCooldown = 0.1
-
-RunService.Heartbeat:Connect(function()
-    if not getgenv().silentAimConfig.ENABLED then return end
-    if not getgenv().silentAimConfig.AUTO_SHOOT then return end
-    
-    local currentTime = tick()
-    if currentTime - lastShot < shootCooldown then return end
-    
-    local target = getClosestTarget()
-    if not target then return end
+local function fireSilentShot()
+    if not getgenv().silentAimConfig.ENABLED then return false end
     
     local myChar = player.Character
-    if not myChar then return end
+    if not myChar then return false end
+    
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return false end
     
     -- Check if we have a gun equipped
     local gun = nil
@@ -265,20 +223,29 @@ RunService.Heartbeat:Connect(function()
         end
     end
     
-    if not gun then return end
+    if not gun then return false end
     
     local muzzle = gun:FindFirstChild("Muzzle", true)
-    if not muzzle then return end
+    if not muzzle then return false end
+    
+    -- Find target
+    local target = getClosestTarget()
+    if not target then return false end
     
     local targetPos = getTargetPosition(target)
-    if not targetPos then return end
+    if not targetPos then return false end
     
-    -- Fire the gun
-    local animator = myChar:FindFirstChild("Humanoid"):FindFirstChild("Animator")
+    -- Get animator
+    local animator = myChar:FindFirstChild("Humanoid")
     if animator then
-        local animTrack = animator:LoadAnimation(shootAnim)
-        animTrack:Play()
+        animator = animator:FindFirstChild("Animator")
     end
+    
+    if not animator then return false end
+    
+    -- Fire gun
+    local animTrack = animator:LoadAnimation(shootAnim)
+    animTrack:Play()
     
     local sound = gun:FindFirstChild("Fire")
     if sound then sound:Play() end
@@ -291,7 +258,28 @@ RunService.Heartbeat:Connect(function()
     
     shootRemote:FireServer(muzzle.WorldPosition, targetPos, targetPart, targetPos)
     
-    lastShot = currentTime
+    return true
+end
+
+-- ========================================
+-- MOUSE CLICK DETECTION
+-- ========================================
+local lastShot = 0
+local shootCooldown = 0.1
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if not getgenv().silentAimConfig.ENABLED then return end
+        
+        local currentTime = tick()
+        if currentTime - lastShot < shootCooldown then return end
+        
+        if fireSilentShot() then
+            lastShot = currentTime
+        end
+    end
 end)
 
 -- ========================================
