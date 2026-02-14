@@ -1,5 +1,5 @@
 -- ========================================
--- VELAWARE - SILENT AIM MODULE
+-- VELAWARE - SILENT AIM MODULE (IMPROVED)
 -- Murder vs Sheriff Duels
 -- ========================================
 
@@ -11,6 +11,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
+local mouse = player:GetMouse()
 
 local animations = Replicated.Animations
 local remotes = Replicated.Remotes
@@ -31,10 +32,12 @@ getgenv().silentAimConfig = {
     MAX_DISTANCE = 500,
     TEAM_CHECK = true,
     VISIBLE_CHECK = true,
+    PREDICT_MOVEMENT = true,
+    PREDICTION_MULTIPLIER = 0.12,
 }
 
 -- ========================================
--- FOV CIRCLE
+-- FOV CIRCLE (FOLLOWS CURSOR)
 -- ========================================
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness = 2
@@ -47,8 +50,8 @@ fovCircle.Visible = false
 
 local function updateFOVCircle()
     if getgenv().silentAimConfig.SHOW_FOV and getgenv().silentAimConfig.ENABLED then
-        local mousePos = UserInputService:GetMouseLocation()
-        fovCircle.Position = mousePos
+        -- Follow the mouse cursor instead of screen center
+        fovCircle.Position = Vector2.new(mouse.X, mouse.Y)
         fovCircle.Radius = getgenv().silentAimConfig.FOV_RADIUS
         fovCircle.Visible = true
     else
@@ -84,20 +87,15 @@ local function isTargetVisible(targetChar, fromPosition)
     local direction = targetPart.Position - fromPosition
     local rayResult = Workspace:Raycast(fromPosition, direction, raycastParams)
     
-    -- If raycast hits something, check if it's a wall/solid object
-    if rayResult then
-        local hitPart = rayResult.Instance
-        
-        -- Allow shooting through certain objects (like small props, particles, effects)
-        if hitPart.Transparency >= 0.5 then return true end
-        if hitPart.CanCollide == false then return true end
-        if hitPart:IsA("ParticleEmitter") or hitPart:IsA("Beam") then return true end
-        
-        -- Block if it's a solid wall/part
-        return false
+    -- Return true if no obstruction or if we hit the target character
+    if not rayResult then return true end
+    
+    -- Check if we hit the target or something in the target
+    if rayResult.Instance:IsDescendantOf(targetChar) then
+        return true
     end
     
-    return true
+    return false
 end
 
 local function isInFOV(targetPosition)
@@ -105,7 +103,8 @@ local function isInFOV(targetPosition)
     
     if not onScreen then return false end
     
-    local mousePos = UserInputService:GetMouseLocation()
+    -- Use mouse position instead of screen center
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
     local targetPos2D = Vector2.new(screenPos.X, screenPos.Y)
     
     local distance = (targetPos2D - mousePos).Magnitude
@@ -147,7 +146,7 @@ local function isValidTarget(targetPlayer)
     -- FOV check
     if not isInFOV(hrp.Position) then return false end
     
-    -- Visibility check (wall check)
+    -- Visibility check (wall check) - only prevents targeting people behind walls
     if getgenv().silentAimConfig.WALL_CHECK and getgenv().silentAimConfig.VISIBLE_CHECK then
         if not isTargetVisible(char, myHrp.Position) then return false end
     end
@@ -162,7 +161,8 @@ local function getClosestTarget()
     local closestPlayer = nil
     local shortestDistance = math.huge
     
-    local mousePos = UserInputService:GetMouseLocation()
+    -- Use mouse position instead of screen center
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
     
     for _, targetPlayer in pairs(Players:GetPlayers()) do
         if isValidTarget(targetPlayer) then
@@ -186,40 +186,106 @@ local function getClosestTarget()
     return closestPlayer
 end
 
-local function getTargetPosition(targetPlayer)
+local function predictTargetPosition(targetPlayer)
+    if not getgenv().silentAimConfig.PREDICT_MOVEMENT then return nil end
     if not targetPlayer or not targetPlayer.Character then return nil end
     
-    -- Priority: Head > UpperTorso > HumanoidRootPart
-    local char = targetPlayer.Character
-    local head = char:FindFirstChild("Head")
-    local upperTorso = char:FindFirstChild("UpperTorso")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
     
-    -- Check visibility for each part
+    -- Calculate velocity-based prediction
+    local velocity = hrp.AssemblyLinearVelocity
+    if velocity.Magnitude < 1 then return nil end -- Target is stationary
+    
     local myChar = player.Character
     if not myChar then return nil end
     local myHrp = myChar:FindFirstChild("HumanoidRootPart")
     if not myHrp then return nil end
     
-    if head and isTargetVisible(char, myHrp.Position) then
-        return head.Position
-    elseif upperTorso then
-        return upperTorso.Position
-    elseif hrp then
-        return hrp.Position
-    end
+    -- Calculate distance and approximate bullet travel time
+    local distance = (hrp.Position - myHrp.Position).Magnitude
+    local bulletSpeed = 500 -- Approximate bullet speed
+    local travelTime = distance / bulletSpeed
     
-    return nil
+    -- Predict where target will be
+    local prediction = velocity * travelTime * getgenv().silentAimConfig.PREDICTION_MULTIPLIER
+    
+    return prediction
 end
 
--- Silent aim now works by exporting functions to GunController
--- No hooks needed!
+local function getTargetPosition(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return nil end
+    
+    local char = targetPlayer.Character
+    local head = char:FindFirstChild("Head")
+    local upperTorso = char:FindFirstChild("UpperTorso")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    
+    local myChar = player.Character
+    if not myChar then return nil end
+    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil end
+    
+    -- Prioritize head for better accuracy
+    local targetPart = nil
+    local basePosition = nil
+    
+    if head then
+        targetPart = head
+        basePosition = head.Position
+    elseif upperTorso then
+        targetPart = upperTorso
+        basePosition = upperTorso.Position
+    elseif hrp then
+        targetPart = hrp
+        basePosition = hrp.Position
+    else
+        return nil
+    end
+    
+    -- Apply prediction if enabled
+    local prediction = predictTargetPosition(targetPlayer)
+    if prediction then
+        basePosition = basePosition + prediction
+    end
+    
+    return basePosition
+end
 
 -- ========================================
--- EXPORT FUNCTIONS FOR GUN CONTROLLER
+-- SILENT AIM HOOK
 -- ========================================
-getgenv().silentAim_getClosestTarget = getClosestTarget
-getgenv().silentAim_getTargetPosition = getTargetPosition
+local originalNamecall
+originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+    
+    -- Hook the shoot remote
+    if method == "FireServer" and self == shootRemote and getgenv().silentAimConfig.ENABLED then
+        local target = getClosestTarget()
+        
+        if target then
+            local targetPos = getTargetPosition(target)
+            
+            if targetPos then
+                -- Get the target part for the server
+                local targetPart = target.Character:FindFirstChild("Head") 
+                    or target.Character:FindFirstChild("UpperTorso")
+                    or target.Character:FindFirstChild("HumanoidRootPart")
+                
+                -- Replace the shot direction arguments
+                args[2] = targetPos  -- Shot direction
+                args[3] = targetPart  -- Hit part
+                args[4] = targetPos   -- Hit position
+                
+                -- Call original with modified args
+                return originalNamecall(self, unpack(args))
+            end
+        end
+    end
+    
+    return originalNamecall(self, ...)
+end)
 
 -- ========================================
 -- FOV CIRCLE UPDATE LOOP
@@ -235,6 +301,10 @@ local Connections = {}
 
 Connections[1] = RunService.RenderStepped:Connect(updateFOVCircle)
 
-print("[Velaware] Silent Aim loaded - Functions exported to GunController")
+print("[VELAWARE] Silent Aim initialized with improvements:")
+print("  - FOV follows cursor")
+print("  - Improved wall check (won't block normal shooting)")
+print("  - Movement prediction")
+print("  - Respects game cooldowns")
 
 return Connections
