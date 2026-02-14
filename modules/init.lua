@@ -2,16 +2,15 @@
 local player = game:GetService("Players").LocalPlayer
 
 function init()
-	local playerModel = workspace:WaitForChild(player.Name)
+	local playerModel = workspace:FindFirstChild(player.Name) -- Changed from WaitForChild
 	if playerModel then
-		local gun = playerModel:WaitForChild("GunController")
+		local gun = playerModel:FindFirstChild("GunController") -- Changed from WaitForChild
 		if gun then
 			pcall(function()
 				gun:Destroy()
 			end)
 		end
-
-		local knife = playerModel:WaitForChild("KnifeController")
+		local knife = playerModel:FindFirstChild("KnifeController") -- Changed from WaitForChild
 		if knife then
 			pcall(function()
 				knife:Destroy()
@@ -20,5 +19,13 @@ function init()
 	end
 end
 
-task.spawn(init)
-return player.CharacterAdded:Connect(init)
+-- Run immediately
+init()
+
+-- Also run on respawn
+player.CharacterAdded:Connect(function()
+	task.wait(0.5) -- Small delay for character to load
+	init()
+end)
+
+return true
