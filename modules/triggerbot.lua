@@ -160,11 +160,9 @@ end
 -- SHOOTING LOGIC
 -- ========================================
 local lastShot = 0
-local isHoldingMouse = false
 
 local function attemptShoot()
     if not getgenv().triggerbotConfig.ENABLED then return end
-    if not isHoldingMouse then return end
     
     local currentTime = tick()
     if currentTime - lastShot < getgenv().triggerbotConfig.DELAY then return end
@@ -187,29 +185,39 @@ local function attemptShoot()
         end
     end
     
-    -- All checks passed - trigger shot
+    -- All checks passed - now shoot using multiple methods
     lastShot = currentTime
     
-    -- Actually click the mouse
-    mouse1click()
+    pcall(function()
+        -- Get equipped tool
+        local tool = player.Character and player.Character:FindFirstChildOfClass("Tool")
+        if not tool then return end
+        
+        -- METHOD 1: Tool Activation
+        if tool:FindFirstChild("Handle") then
+            tool:Activate()
+        end
+        
+        -- METHOD 2: Remote Event (ShootGun)
+        for _, descendant in pairs(tool:GetDescendants()) do
+            if descendant:IsA("RemoteEvent") and (
+                descendant.Name:lower():find("fire") or 
+                descendant.Name:lower():find("shoot") or
+                descendant.Name:lower():find("attack")
+            ) then
+                descendant:FireServer()
+                break
+            end
+        end
+        
+        -- METHOD 3: Mouse Click Simulation
+        if mouse1press then
+            mouse1press()
+            task.wait(0.01)
+            mouse1release()
+        end
+    end)
 end
-
--- ========================================
--- MOUSE TRACKING
--- ========================================
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isHoldingMouse = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input, processed)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isHoldingMouse = false
-    end
-end)
 
 -- ========================================
 -- UPDATE LOOP
