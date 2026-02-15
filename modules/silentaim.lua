@@ -212,8 +212,34 @@ local function getTargetPosition(targetPlayer)
     return nil
 end
 
--- Silent aim now works by exporting functions to GunController
--- No hooks needed!
+-- ========================================
+-- HOOK SHOOTGUN REMOTE (using direct replacement)
+-- ========================================
+local oldFireServer = shootRemote.FireServer
+
+shootRemote.FireServer = function(self, ...)
+    local args = {...}
+    
+    if getgenv().silentAimConfig.ENABLED then
+        local target = getClosestTarget()
+        
+        if target then
+            local targetPos = getTargetPosition(target)
+            
+            if targetPos then
+                local targetPart = target.Character:FindFirstChild("Head") 
+                    or target.Character:FindFirstChild("UpperTorso")
+                    or target.Character:FindFirstChild("HumanoidRootPart")
+                
+                args[2] = targetPos
+                args[3] = targetPart
+                args[4] = targetPos
+            end
+        end
+    end
+    
+    return oldFireServer(self, unpack(args))
+end
 
 -- ========================================
 -- EXPORT FUNCTIONS FOR GUN CONTROLLER
@@ -235,6 +261,6 @@ local Connections = {}
 
 Connections[1] = RunService.RenderStepped:Connect(updateFOVCircle)
 
-print("[Velaware] Silent Aim loaded - Functions exported to GunController")
+print("[Velaware] Silent Aim loaded - Remote hook active")
 
 return Connections
