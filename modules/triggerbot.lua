@@ -14,6 +14,18 @@ local camera = Workspace.CurrentCamera
 local mouse = player:GetMouse()
 
 -- ========================================
+-- CONFIGURATION
+-- ========================================
+getgenv().triggerbotConfig = {
+    ENABLED = false,
+    DELAY = 0.05, -- Delay before shooting (more human-like)
+    TEAM_CHECK = true,
+    STRICT_WALL_CHECK = true, -- Very strict visibility check
+    REQUIRE_CROSSHAIR = true, -- Only shoot if directly aiming at them
+    CROSSHAIR_TOLERANCE = 15, -- Pixels from exact center (very tight)
+}
+
+-- ========================================
 -- STRICT WALL CHECK
 -- ========================================
 local function isStrictlyVisible(targetChar)
@@ -176,17 +188,10 @@ local function attemptShoot()
     end
     
     -- All checks passed - trigger shot
-    -- The gun controller will handle the actual shooting
-    -- We just need to detect mouse click
     lastShot = currentTime
     
-    -- Simulate mouse click for gun controller
-    local mouseEvent = Instance.new("BindableEvent")
-    mouseEvent.Event:Connect(function()
-        mouse.Button1Down:Fire()
-    end)
-    mouseEvent:Fire()
-    mouseEvent:Destroy()
+    -- Actually click the mouse
+    mouse1click()
 end
 
 -- ========================================
