@@ -66,8 +66,20 @@ local function shootGun(tool, targetPosition)
 		targetPosition = mouse.Hit.Position + (MOUSE_RAYCAST_OFFSET * mouse.UnitRay.Direction)
 	end
 
-	local screenRayResult =
-		WeaponRaycast(currentCamera.CFrame.Position, targetPosition, nil, CollisionGroups.SCREEN_RAYCAST)
+	-- Check for silent aim target
+	local silentTarget = nil
+	local silentTargetPos = nil
+	
+	if getgenv().silentAimConfig and getgenv().silentAimConfig.ENABLED then
+		-- Try to get silent aim target
+		if getgenv().silentAim_getClosestTarget then
+			silentTarget = getgenv().silentAim_getClosestTarget()
+			if silentTarget and getgenv().silentAim_getTargetPosition then
+				silentTargetPos = getgenv().silentAim_getTargetPosition(silentTarget)
+			end
+		end
+	end
+
 	local characterOrigin = CharacterRayOrigin(character)
 	if not characterOrigin then
 		getgenv().controller.lock.gun = false
@@ -75,12 +87,31 @@ local function shootGun(tool, targetPosition)
 	end
 
 	local finalTarget = targetPosition
-	if screenRayResult and screenRayResult.Position then
-		finalTarget = screenRayResult.Position
-	end
+	local hitInstance = nil
+	local hitPosition = nil
+	
+	-- Use silent aim target if available
+	if silentTargetPos then
+		finalTarget = silentTargetPos
+		hitInstance = silentTarget.Character:FindFirstChild("Head") 
+			or silentTarget.Character:FindFirstChild("UpperTorso")
+			or silentTarget.Character:FindFirstChild("HumanoidRootPart")
+		hitPosition = silentTargetPos
+	else
+		-- Normal shooting
+		local screenRayResult =
+			WeaponRaycast(currentCamera.CFrame.Position, targetPosition, nil, CollisionGroups.SCREEN_RAYCAST)
+		
+		if screenRayResult and screenRayResult.Position then
+			finalTarget = screenRayResult.Position
+		end
 
-	local worldRayResult = WeaponRaycast(characterOrigin, finalTarget)
-	local hitResult = worldRayResult or screenRayResult
+		local worldRayResult = WeaponRaycast(characterOrigin, finalTarget)
+		local hitResult = worldRayResult or screenRayResult
+		
+		hitInstance = hitResult and hitResult.Instance
+		hitPosition = hitResult and hitResult.Position
+	end
 
 	local fireSound = tool:FindFirstChild(FIRE_SOUND_NAME)
 	if fireSound then
@@ -90,8 +121,6 @@ local function shootGun(tool, targetPosition)
 	BulletRenderer(muzzleAttachment.WorldPosition, finalTarget, tool:GetAttribute("BulletType"))
 	tool:Activate()
 
-	local hitInstance = hitResult and hitResult.Instance
-	local hitPosition = hitResult and hitResult.Position
 	shootGunRemote:FireServer(characterOrigin, finalTarget, hitInstance, hitPosition)
 	getgenv().controller.lock.gun = false
 end
