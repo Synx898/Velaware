@@ -119,19 +119,25 @@ local function throwKnife(tool, targetPosition, isManualActivation)
 		return
 	end
 
-	-- FIX: Get target position if not provided
-	if not targetPosition then
-		targetPosition = mouse.Hit.Position
-	end
+	local hrpPosition = targetPosition and CharacterRayOrigin(character)
+	local throwDirection
 
-	local hrpPosition = CharacterRayOrigin(character)
-	if not hrpPosition then
-		return
+	if targetPosition then
+		throwDirection = getThrowDirection(targetPosition, hrpPosition)
 	end
-
-	local throwDirection = getThrowDirection(targetPosition, hrpPosition)
 
 	local function createKnifeProjectile()
+		if not hrpPosition then
+			hrpPosition = CharacterRayOrigin(character)
+			if not hrpPosition then
+				return
+			end
+		end
+
+		if not throwDirection then
+			throwDirection = getThrowDirection(targetPosition, hrpPosition)
+		end
+
 		setKnifeHandleTransparency(tool, 1)
 		throwStartRemote:FireServer(hrpPosition, throwDirection)
 		KnifeProjectileController({
@@ -161,6 +167,9 @@ local function throwKnife(tool, targetPosition, isManualActivation)
 			end)
 
 			throwAnimationTrack:GetMarkerReachedSignal("Completed"):Connect(function()
+				if not targetPosition then
+					targetPosition = mouse.Hit.Position
+				end
 				resolve()
 			end)
 
@@ -343,14 +352,12 @@ local function handleThrowInput(tool)
 		tool.ManualActivationOnly = true
 		handleMouseThrowInput(tool)
 	else
-		-- FIX: Changed to properly handle E key press
 		ContextActionService:BindAction("Throw", function(actionName, inputState)
 			if actionName == "Throw" and inputState == Enum.UserInputState.Begin then
 				if isStabMode then
 					tool:Activate()
 				else
-					-- FIX: Pass mouse.Hit.Position instead of nil
-					throwKnife(tool, mouse.Hit.Position, true)
+					throwKnife(tool, nil, true)
 				end
 			end
 		end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonL2)
