@@ -1,51 +1,47 @@
 # 🚀 Velaware
 
-**Advanced script for Murder Vs Sheriff Duels (MVSD)**
+**Premium script suite for enhanced gameplay.**
 
 [![Discord](https://img.shields.io/badge/Discord-Join-7289DA)](https://discord.gg/6PS2mHcVjT)
+[![Website](https://img.shields.io/badge/Website-Visit-6366f1)](https://velaware2.lovable.app/)
 
 ---
 
-## 📋 Features
+## 🌐 Overview
 
-- 🎯 **Gun Aimbot** - Smart targeting with prediction
-- 🔪 **Knife Aimbot** - Perfect throws with trajectory
-- 👁️ **ESP** - See players through walls
-- ⚡ **Triggerbot** - Auto-fire on target
-- ⚙️ **Auto-Equip** - Smart weapon switching
-- 🛡️ **Team Check** - Never target teammates
+Velaware provides high-quality, optimized scripts for a variety of popular experiences. We currently offer dedicated support for **5 games**, ensuring a polished and reliable experience for our community.
+
+**Supported Games:**
+* Murder Vs Sheriff Duels
+* Jailbreak
+* Notoriety: A PAYDAY® Experience
+* Attack on Titan Revolution
+* Untitled Attack on Titan
 
 ---
 
 ## 🚀 Installation
+
+Copy and paste the universal loader into your executor. Our system will automatically detect the game and load the appropriate module.
+
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Synx898/Velaware/main/loader.lua"))()
+loadstring(game:HttpGet("[https://raw.githubusercontent.com/Synx898/Velaware/refs/heads/main/Loader.lua](https://raw.githubusercontent.com/Synx898/Velaware/refs/heads/main/Loader.lua)"))()
 ```
 
-Execute in MVSD and you're set!
-
 ---
 
-## ⚙️ Settings
+## 🔗 Links
 
-All configurable in-game:
-- Aimbot FOV, distance, smoothing
-- ESP colors, tracers, health bars
-- Filters, team check, whitelist
-
----
-
-## 🐛 Support
-
-- **Discord:** [Join Server](https://discord.gg/6PS2mHcVjT)
-- **Bugs:** `#🐛┃bug-reports`
-- **Ideas:** `#💡┃suggestions`
+- **Official Website:** [velaware2.lovable.app](https://velaware2.lovable.app/)
+- **Community & Support:** [Join our Discord](https://discord.gg/6PS2mHcVjT)
+- **Bug Reports:** Report issues in `#🐛┃bug-reports`
+- **Suggestions:** Share ideas in `#💡┃suggestions`
 
 ---
 
 ## ⚠️ Disclaimer
 
-Educational purposes only. Use at your own risk.
+This project is for educational purposes only. Use of third-party scripts may result in account actions. Use at your own risk.
 
 ---
 
