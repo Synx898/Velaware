@@ -25,7 +25,8 @@ Velaware provides high-quality, optimized scripts for a variety of popular exper
 Copy and paste the universal loader into your executor. Our system will automatically detect the game and load the appropriate module.
 
 ```lua
-loadstring(game:HttpGet("[https://raw.githubusercontent.com/Synx898/Velaware/refs/heads/main/Loader.lua](https://raw.githubusercontent.com/Synx898/Velaware/refs/heads/main/Loader.lua)"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Synx898/Velaware/refs/heads/main/Loader.lua"))()
+
 ```
 
 ---
