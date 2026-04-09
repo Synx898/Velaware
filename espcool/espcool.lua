@@ -41,6 +41,9 @@ local MainESP = {
 		DirectionThickness = 0,
 		SkeletonThickness = 0,
         Bounties = false, -- jb only
+        ShowPolice = true,
+        ShowCriminal = true,
+        ShowPrisoner = true,
 	},
 	ObjectOptions = {
 		Enabled = false,
@@ -59,6 +62,19 @@ local MainESP = {
     _colorCache = {},
     _positionCache = {},
 }
+
+--[[ Team Filter Function ]]--
+function MainESP:ShouldShowPlayer(player)
+    if not player or not player.Team then return true end
+    
+    local team = tostring(player.Team)
+    
+    if team == "Police" and not self.Options.ShowPolice then return false end
+    if team == "Criminal" and not self.Options.ShowCriminal then return false end
+    if team == "Prisoner" and not self.Options.ShowPrisoner then return false end
+    
+    return true
+end
 
 --[[ Drawing Creation Functions ]]--
 function MainESP.CreateBox()
@@ -217,12 +233,6 @@ function CacheManager:CleanupCaches()
     end
     
     self.lastCleanup = now
-    
-    -- Debug info (remove in production)
-    -- if #positionKeysToRemove > 0 or #colorKeysToRemove > 0 then
-    --     print(string.format("Cache cleanup: Removed %d position entries, %d color entries", 
-    --         #positionKeysToRemove, #colorKeysToRemove))
-    -- end
 end
 
 function MainESP:GetCachedPosition(part, partName, player, forceUpdate)
@@ -614,8 +624,10 @@ function MainESP:HidePlayerESP(playerESP)
             for _, line in pairs(element) do
                 line.Visible = false
             end
-        elseif elementName ~= "Connections" and elementName ~= "IsPlayer" then
-            element.Visible = false
+        elseif elementName ~= "Connections" and elementName ~= "IsPlayer" and elementName ~= "_BoxDimensions" then
+            if element and element.Visible ~= nil then
+                element.Visible = false
+            end
         end
     end
 end
@@ -722,12 +734,10 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
         -- Only adjust if we have enough history for reliable average
         if #ESPPerformance.fpsHistory >= math.min(10, ESPPerformance.fpsHistorySize) then
             if currentAvgFPS < ESPPerformance.targetFPS - ESPPerformance.stabilityThreshold then
-				-- print("reducing interval")
                 -- FPS too low, reduce ESP update rate
                 local adjustment = 1 + ESPPerformance.adjustmentRate
                 ESPPerformance.interval = math.min(ESPPerformance.interval * adjustment, ESPPerformance.minInterval)
             elseif currentAvgFPS > ESPPerformance.targetFPS + ESPPerformance.stabilityThreshold then
-				-- print("increasing interval")
                 -- FPS good, can increase ESP update rate
                 local adjustment = 1 - ESPPerformance.adjustmentRate
                 ESPPerformance.interval = math.max(ESPPerformance.interval * adjustment, ESPPerformance.maxInterval)
@@ -736,10 +746,6 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
         end
         
         ESPPerformance.lastOptimize = now
-        
-        -- Debug output (remove in production)
-        -- print(string.format("ESP: Avg FPS: %.1f, Interval: %.3f, Update Rate: %.1f", 
-        --     currentAvgFPS, ESPPerformance.interval, 1/ESPPerformance.interval))
     end
     
     -- Frame limiting with smooth intervals
@@ -755,6 +761,12 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
             if not player or not player.Parent then
                 -- Clean up invalid player
                 MainESP:RemoveESP(player)
+                continue
+            end
+
+            -- TEAM FILTER CHECK - ADDED HERE
+            if not MainESP:ShouldShowPlayer(player) then
+                MainESP:HidePlayerESP(playerESP)
                 continue
             end
 
@@ -908,7 +920,7 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
                     playerESP.Name.Visible = false
                 end
 
-                -- jb bounties system (WARNING: poorly wrtitten)
+                -- jb bounties system
                 if MainESP.Options.Bounties and onScreen and game.PlaceId == 606849621 then
                     if not infoX then
                         infoX = dims.x + dims.width / 2
@@ -945,7 +957,7 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
                     playerESP.Bounties.OutlineColor = Color3.fromRGB(0, 0, 0)
                     playerESP.Bounties.Visible = true
                 else
-                    playerESP.Bounties.Visible = false
+                    if playerESP.Bounties then playerESP.Bounties.Visible = false end
                 end
                 
                 -- Distance ESP (full/medium detail)
@@ -989,89 +1001,13 @@ local globalRenderConnection = Services.RunService.RenderStepped:Connect(functio
     end
 end)
 
---[[ Game Compatibility ]]--
-local CompatibilityFuncs = {
-    [292439477] = function() -- Phantom Forces
-        for _, v in pairs(getgc(true)) do
-            if type(v) == "function" and islclosure(v) then
-                local constants = getconstants(v)
-                if getinfo(v).name == "gethealth" and table.find(constants, "alive") then
-                    MainESP.GetHealth = v
-                end
-            elseif type(v) == "table" and rawget(v, "getbodyparts") then
-                getgenv().PF_Replication = v
-            end
-        end
-        
-        Services.RunService.Stepped:Connect(function()
-            for _, player in pairs(Services.Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    local body = getgenv().PF_Replication.getbodyparts(player)
-                    if body and rawget(body, "rootpart") then
-                        player.Character = body.rootpart.Parent
-                    else
-                        player.Character = nil
-                    end
-                end
-            end
-        end)
-    end,
-    
-    [286090429] = function() -- Arsenal
-        MainESP.GetHealth = function(player)
-            return player.NRPBS.Health.Value, 100
-        end
-    end,
-    
-    [142823291] = function() -- Murder Mystery 2
-        local murderTeam = Instance.new("Team")
-        murderTeam.Name = "Murderer"
-        murderTeam.TeamColor = BrickColor.new("Bright red")
-        murderTeam.Parent = game.Teams
-        
-        local sheriffTeam = Instance.new("Team")
-        sheriffTeam.Name = "Sheriff" 
-        sheriffTeam.TeamColor = BrickColor.new("Bright blue")
-        sheriffTeam.Parent = game.Teams
-        
-        local innocentTeam = Instance.new("Team")
-        innocentTeam.Name = "Innocent"
-        innocentTeam.TeamColor = BrickColor.new("Bright green")
-        innocentTeam.Parent = game.Teams
-        
-        task.spawn(function()
-            while true do
-                local success, playerData = pcall(function()
-                    return Services.ReplicatedStorage.GetPlayerData:InvokeServer()
-                end)
-                
-                if success and playerData then
-                    for _, player in pairs(Services.Players:GetPlayers()) do
-                        if playerData[player.Name] and playerData[player.Name].Role then
-                            player.Team = game.Teams[playerData[player.Name].Role]
-                        else
-                            player.Team = innocentTeam
-                        end
-                    end
-                end
-                task.wait(1)
-            end
-        end)
-    end,
-}
-
--- Apply game-specific compatibility
-if CompatibilityFuncs[game.PlaceId] then
-    CompatibilityFuncs[game.PlaceId]()
-end
-
 --[[ Player Management ]]--
 Services.Players.PlayerAdded:Connect(function(player)
     MainESP:CreateESP(player)
 end)
 
 Services.Players.PlayerRemoving:Connect(function(player)
-    MainESP:RemoveESP(player.Name)
+    MainESP:RemoveESP(player)
 end)
 
 for _, player in pairs(Services.Players:GetPlayers()) do
