@@ -71,7 +71,15 @@ function ESPSystem.Remove(player)
     if not obj then return end
     for _, v in pairs(obj) do
         pcall(function()
-            if v.Remove then v:Remove() else v:Destroy() end
+            if type(v) == "table" and v.type == "box" then
+                for _, line in pairs(v.corners or {}) do
+                    pcall(function() line:Remove() end)
+                end
+            elseif v.Remove then
+                v:Remove()
+            else
+                v:Destroy()
+            end
         end)
     end
     ESPObjects[player] = nil
@@ -191,33 +199,42 @@ function ESPSystem.Create(player)
         table.insert(objects, bb)
     end
 
-    -- Tracer
-    if ESPConfig.ShowTracers then
-        local tracer = Drawing.new("Line")
-        tracer.Visible = false; tracer.Color = color
-        tracer.Thickness = math.min(ESPConfig.MaxTracerThickness, 2.5)
-        tracer.Transparency = 0.8
-        table.insert(objects, tracer)
-        task.spawn(function()
-            while tracer and player.Character do
-                pcall(function()
-                    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local sp, onScreen = worldToScreen(hrp.Position)
-                        if onScreen then
-                            local startY = ESPConfig.TracerOrigin == "Top" and 0
-                                or ESPConfig.TracerOrigin == "Middle" and Client.Camera.ViewportSize.Y / 2
-                                or Client.Camera.ViewportSize.Y
-                            tracer.From = Vector2.new(Client.Camera.ViewportSize.X / 2, startY)
-                            tracer.To = sp; tracer.Visible = true
-                            tracer.Color = getColor(player)
-                        else tracer.Visible = false end
+    -- Tracer (always create, visibility controlled dynamically)
+    local tracer = Drawing.new("Line")
+    tracer.Visible = false
+    tracer.Color = color
+    tracer.Thickness = math.min(ESPConfig.MaxTracerThickness, 2.5)
+    tracer.Transparency = 0.8
+    table.insert(objects, tracer)
+    task.spawn(function()
+        while tracer and player.Character do
+            pcall(function()
+                if not ESPConfig.ShowTracers then
+                    tracer.Visible = false
+                    return
+                end
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local sp, onScreen = worldToScreen(hrp.Position)
+                    if onScreen then
+                        local startY = ESPConfig.TracerOrigin == "Top" and 0
+                            or ESPConfig.TracerOrigin == "Middle" and Client.Camera.ViewportSize.Y / 2
+                            or Client.Camera.ViewportSize.Y
+                        tracer.From = Vector2.new(Client.Camera.ViewportSize.X / 2, startY)
+                        tracer.To = sp
+                        tracer.Visible = true
+                        tracer.Color = getColor(player)
+                        tracer.Thickness = math.min(ESPConfig.MaxTracerThickness, 2.5)
+                    else
+                        tracer.Visible = false
                     end
-                end)
-                task.wait(0.03)
-            end
-        end)
-    end
+                else
+                    tracer.Visible = false
+                end
+            end)
+            task.wait(0.016)
+        end
+    end)
 
     ESPObjects[player] = objects
 end
@@ -228,6 +245,10 @@ function ESPSystem.UpdateAll(filterFn)
             if not ESPObjects[player] and player.Character then ESPSystem.Create(player) end
         else ESPSystem.Remove(player) end
     end
+end
+
+function ESPSystem.ToggleTracers(enabled)
+    ESPConfig.ShowTracers = enabled
 end
 
 function ESPSystem.Initialize(filterFn)
